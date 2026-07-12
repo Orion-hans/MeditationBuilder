@@ -264,6 +264,20 @@ input[type=range]{accent-color:var(--teal)}
   </div>
   <div id="breathIntHint" class="breath-hint"></div>
 
+  <div class="toggle-row">
+    <span class="toggle-label">개화 패턴</span>
+    <div class="opts" id="bloomToggle">
+      <span class="opt-g active" onclick="setBloom('auto')" data-bp="auto">자동</span>
+      <span class="opt-g" onclick="setBloom('bloom')" data-bp="bloom">개화</span>
+      <span class="opt-g" onclick="setBloom('frontload')" data-bp="frontload">초반포화</span>
+      <span class="opt-g" onclick="setBloom('buildup')" data-bp="buildup">점층</span>
+      <span class="opt-g" onclick="setBloom('wave')" data-bp="wave">파도</span>
+      <span class="opt-g" onclick="setBloom('pulse')" data-bp="pulse">맥동</span>
+      <span class="opt-g" onclick="setBloom('surge')" data-bp="surge">상승</span>
+    </div>
+  </div>
+  <div id="bloomHint" class="breath-hint"></div>
+
   <div class="section-t">4. 빌드업 단계 <span style="font-weight:400;font-size:12px;opacity:.72">— 곡을 6구간으로 나눠 단계 지정 · 기본은 목적별 자동 추천</span></div>
   <div id="stageSeqRow" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;"></div>
   <div id="stageHint" class="sel-hint" style="margin-top:6px"></div>
@@ -484,6 +498,12 @@ const BREATHS = {
 const PURPOSE_MULT = {
   sleep:2, meditation:2, focus:4, relax:2, morning:3, calm:2, flow:2,
   pilates:4, walking:4, spa:2, baby:3
+};
+// 목적별 보이싱 개화 패턴 (자동) — bloom:비움↔풀 / frontload:초반포화 / buildup:하나씩 쌓기 / wave:거의안변함
+const PURPOSE_BLOOM = {
+  sleep:'wave', meditation:'bloom', calm:'wave', relax:'frontload',
+  focus:'wave', morning:'buildup', flow:'bloom',
+  pilates:'buildup', walking:'buildup', spa:'bloom', baby:'wave'
 };
 // 목적별 코드길이 상한(초) — 수면/명상은 느긋하게, 집중은 단조로움 방지
 const PURPOSE_CAP = {
@@ -961,6 +981,22 @@ function checkMud(midiNotes){
   for(let i=0;i<s.length-1;i++){ if(s[i]<40 && (s[i+1]-s[i])<=4) return true; }
   return false;
 }
+// 화음 기능 우선순위: 근음(1) → 완전5도(2) → 3도(3) → 7도(4) → 확장/변화음(5)
+function toneRank(pc){
+  pc=((pc%12)+12)%12;
+  if(pc===0) return 1;            // 근음
+  if(pc===7) return 2;            // 완전5도
+  if(pc===3||pc===4) return 3;    // 단/장3도
+  if(pc===10||pc===11) return 4;  // 단/장7도
+  return 5;                       // 9·11·13·b5·#5 등 색채음
+}
+// 밀도 D(1~5)까지만 남기고 위 기능음은 솎아냄. 최소 근음은 항상 보장.
+function thinToDensity(notes, rootPc, D){
+  const kept=notes.filter(n=>toneRank(n-rootPc)<=D);
+  if(kept.length) return kept;
+  const roots=notes.filter(n=>(((n-rootPc)%12)+12)%12===0);
+  return roots.length?roots:[Math.min.apply(null,notes)];
+}
 // 현재 음역·보이싱 결정 (자동: 에스테틱>목적)
 function currentVoice(){
   if(state.aes && AES_VOICE[state.aes]) return AES_VOICE[state.aes];
@@ -1267,10 +1303,27 @@ function generatePiece(prog, capMin){
         notes=notes.filter(x=>x!==low);
         if(notes.indexOf(tonLow)<0) notes.unshift(tonLow);
       }
-      // 질감 뉘앙스: 같은 코드를 '서서히 변하는 색'으로 — loop마다 음 하나를 더하고 뺀다
-      const vv=L%4;
-      if(vv===1 && notes.length>3) notes=notes.slice(0,-1);                                        // 얇게 (윗음 내려놓음)
-      else if(vv===2){ const top=Math.min.apply(null,notes)+24; if(top<=84 && notes.indexOf(top)<0) notes=notes.concat([top]); } // 위 옥타브 색채음 (밝게)
+      // ── 호흡형 보이싱 아크: 화성은 유지, 코드 안 '음 수'를 서서히 비우고 쌓기 ──
+      // 패턴은 목적별 자동(PURPOSE_BLOOM). 곡이 길수록 반복 횟수 ↑ (반복적 호흡).
+      const _totalSlots=loops*chords.length;
+      const _songPos=_totalSlots>1 ? slot/(_totalSlots-1) : 0.5;
+      const _cycles=Math.max(1, Math.min(5, Math.round(loops/6)));      // 길수록 여러 번 호흡
+      const _ph=(_songPos*_cycles)%1;
+      const _tri=_ph<0.5 ? _ph*2 : (1-_ph)*2;                           // 0→1→0
+      const _pat=(state.bloomPat && state.bloomPat!=='auto') ? state.bloomPat : (PURPOSE_BLOOM[state.purpose]||'bloom');
+      let _O;                                                           // openness 0~1
+      if(_pat==='bloom')          _O=_tri;                              // 비움→풀→비움
+      else if(_pat==='frontload') _O=1-_tri;                            // 풀→비움→풀, 초반 포화
+      else if(_pat==='buildup')   _O=_ph<0.8 ? _ph/0.8 : (1-(_ph-0.8)/0.2); // 하나씩 쌓고 잠깐 풀림
+      else if(_pat==='pulse'){ const c2=_cycles*2+1, p2=(_songPos*c2)%1; _O=p2<0.5?p2*2:(1-p2)*2; } // 더 잦은 호흡
+      else if(_pat==='surge')     _O=Math.min(1,_songPos*0.9)+0.1*_tri; // 서서히 계속 차오름
+      else                        _O=0.7+0.3*Math.sin(2*Math.PI*_cycles*_songPos); // wave: 완만·거의 안 변함
+      _O=Math.max(0,Math.min(1,_O));
+      const _floorD=1+Math.round(inten*2);                              // 만개일수록 최소 밀도 ↑ (climax 안 비게)
+      let _D=Math.round(_floorD + _O*(5-_floorD));                      // 1(근음)~5(풀)
+      _D=Math.max(1,Math.min(5,_D));
+      const _rp=((((chordToSemis(cname)||[0])[0])%12)+12)%12;           // 코드 근음 pitch-class
+      notes=thinToDensity(notes, _rp, _D);
       const vBase=[58,62,66,56][i%4];
       const vel=Math.max(34, Math.round(vBase*(0.6+0.4*inten)));  // 강도 낮으면 여리게
       ev.chords.push({t, dur, name:cname, notes, vel, inten, stage:st.id});
@@ -1737,7 +1790,7 @@ let randomMelodies = [];
 
 
 
-function defaultState(){ return { purpose:null, scaleType:"auto", key:"C", breath:"auto", breathInt:"normal", mode:"auto", aes:null, masking:false, binaural:"off", midiDur:5, range:"mid", voicing:"root",
+function defaultState(){ return { purpose:null, scaleType:"auto", key:"C", breath:"auto", breathInt:"normal", bloomPat:"auto", mode:"auto", aes:null, masking:false, binaural:"off", midiDur:5, range:"mid", voicing:"root",
   space:"auto", bright:"auto", tuning:440, solfeggio:"off", take:0, melodyIdx:0, layersOn:{pad:true,bass:true,melody:true,point:true} }; }
 let state = defaultState();
 let showRandom=false;
@@ -1829,6 +1882,9 @@ function setBreath(b){ state.breath=b; document.querySelectorAll("#breathToggle 
 function setBreathInt(v){ state.breathInt=v; document.querySelectorAll("#breathIntToggle .opt-g").forEach(e=>e.classList.toggle("active",e.dataset.bi===v));
   const H={off:"패드 호흡 없음 — 평탄하게.", soft:"살짝 부풂 (은은).", normal:"들숨에 부풀고 날숨에 잦아듦 (기본).", strong:"확 부풀었다 확 잦아듦 — 베이스도 함께 호흡."};
   const el=document.getElementById('breathIntHint'); if(el) el.textContent=H[v]||""; }
+function setBloom(v){ state.bloomPat=v; document.querySelectorAll("#bloomToggle .opt-g").forEach(e=>e.classList.toggle("active",e.dataset.bp===v));
+  const H={auto:"목적에 맞춰 자동 (명상=개화·수면=파도·아침=점층·이완=초반포화 …).", bloom:"근음→풀→비움 반복 (숨쉬듯 피고 짐).", frontload:"초반에 다 나왔다가 빠지고 다시 채움.", buildup:"근음부터 하나씩 쌓여 풀로.", wave:"거의 안 변함 — 완만하게 오르내림 (수면·집중).", pulse:"더 자주 비웠다 채움 (잦은 호흡).", surge:"서서히 계속 차올라 만개로 (긴 크레셴도)."};
+  const el=document.getElementById('bloomHint'); if(el) el.textContent=(v==='auto'&&state.purpose?H.auto+" 현재: "+(PURPOSE_BLOOM[state.purpose]||'bloom'):H[v])||""; }
 function setRange(r){ state.range=r; document.querySelectorAll("#rangeToggle .opt-g").forEach(e=>e.classList.toggle("active",e.dataset.rg===r)); updateVoiceHint(); render(); }
 function setVoicing(v){ state.voicing=v; document.querySelectorAll("#voicingToggle .opt-g").forEach(e=>e.classList.toggle("active",e.dataset.vc===v)); updateVoiceHint(); render(); }
 // 실제 적용될 음역·보이싱 (auto면 추천값)
