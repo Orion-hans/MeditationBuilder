@@ -1524,6 +1524,9 @@ function stopBGM(){
   bgmNodes = [];
   // 모든 BGM 버튼 표시 초기화
   document.querySelectorAll('.bgm-btn.playing').forEach(b=>{ b.textContent='▶ BGM'; b.classList.remove('playing'); });
+  // 하단 '전체 재생' 버튼도 초기화 (dockPlay는 .bgm-btn이 아니라 별도 처리)
+  const _dpBtn=document.getElementById('dockPlay');
+  if(_dpBtn){ _dpBtn.textContent='▶ 전체 재생'; _dpBtn.classList.remove('playing'); }
 }
 
 function playBGM(btn, chordStr){
