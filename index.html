@@ -2800,6 +2800,7 @@ function logicFxText(){
   return `[Meditation Builder 이펙트 설정 — ${aesName} / ${pName}]
 ${voiceLine}
 Logic Pro 채널 스트립 · 순서: Channel EQ → Compressor → ChromaVerb
+(아래 ①②③은 Chord/패드 트랙 기준 — 트랙별 차이는 다음 [트랙별 적용] 참고)
 
 ① Channel EQ
    · Low Cut (High-pass): 80 Hz, 12 dB/oct
@@ -2816,6 +2817,27 @@ Logic Pro 채널 스트립 · 순서: Channel EQ → Compressor → ChromaVerb
    · Mix (Dry/Wet): ${Math.round(fx.wet*100)} %
 ④ MIDI FX (트랙 인스펙터)
    · ${inst.midifx || '사용 안 함 — 여백이 유도 장치. 아르페지에이터는 밀도를 높여 명상 흐름에 역효과'}
+
+[트랙별 적용 — 어느 트랙에 어떻게]
+· Chord / 패드 트랙  → 위 ①②③ 그대로 (기준)
+    EQ  LowCut 80Hz · 300Hz -2dB · High Shelf 10kHz +1~2dB
+    Comp  Thr -20 · 1.5:1 · Atk 40 · Rel 300
+    리버브  센드 Verb-A 35% (넓은 공간)
+· Bass / Drone 트랙  → 드라이·묵직하게
+    EQ  LowCut 끔 · 200Hz -3dB · High Cut 3kHz (어둡게)
+    Comp  Thr -18 · 2:1 · Atk 30 · Rel 200
+    리버브  거의 없음(0~10%) · 모노·센터
+· 포인트(Bowl·Handpan·Tingsha) 트랙  → 또렷·긴 꼬리
+    EQ  LowCut 150Hz · 5kHz +1dB   ※ Tingsha만 LowCut 1kHz까지
+    Comp  Thr -16 · 2:1 · Atk 20 · Rel 150
+    리버브  센드 Verb-B 45% (긴 꼬리)
+· Bowl Sing(지속) 트랙  → 깔리는 지속
+    EQ  LowCut 120Hz · 400Hz -2dB
+    Comp  Thr -22 · 1.5:1 · Atk 80 · Rel 400
+    리버브  센드 Verb-B 50% · 어택 3~7초 느리게
+※ 리버브는 인서트보다 센드(Aux) 권장 — 컴프 뒤 펌핑 방지 + 공간 일관성.
+   Aux 2개: Verb-A(ChromaVerb Chamber 3.5s/70%) · Verb-B(Synth Hall 5.5s/85%) · 리턴 HPF 400~500Hz·하이 담핑
+   저역(Bass/Drone)은 센드 0 — 리버브 안 보냄.
 
 [MIDI에 이미 박혀 있는 것 — Logic "열기(Open)"로 불러오세요 (Import 아님)]
    · 템포 60 BPM(1초=1박) · 4/4 · 루프 마커(Loop 1, 2…)
