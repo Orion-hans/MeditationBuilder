@@ -567,6 +567,21 @@ const AESTHETICS = {
     space:"단순한 순음의 지속, 배음 명상", mix:"맑고 순수하게, 비트 없이"}
 };
 
+// 장르(에스테틱)별 FX 레시피 — 무엇을 · 어느 트랙에 · 어떻게 (MIDI엔 못 담겨 로직에서 직접)
+const AES_FXREC = {
+  minimal:"패드/피아노: 짧은 룸 리버브 1~1.5s·Mix 15%만. 딜레이·모듈레이션 없음(여백이 핵심). 전체 드라이·투명.",
+  cinematic:"패드·현: 긴 홀 리버브(ChromaVerb Hall 4~6s·Mix 30%). 현 스웰엔 센드 크게. 버스 글루컴프 1~2dB. 저역 드론 드라이.",
+  natural:"전 트랙 짧은 룸 0.8~1.5s. 패드·기타에 ChromaGlow 온기(Drive 15%). 리버브 적게·가깝게. 자연음 베드 -24dB.",
+  ambient:"패드·텍스처: 매우 긴 리버브 6~10s·Mix 40% + Chorus(Rate 0.3Hz). 롱 딜레이 피드백. 저역만 드라이. 넓게 와이드.",
+  zen:"싱잉볼·포인트: 긴 자연 잔향 4~6s. 딜레이 없음(절제). 리버브 꼬리 길게·담핑, 한 음의 여운 살림.",
+  vintage:"패드·EP: 테이프 새추레이션(ChromaGlow/Phat FX) + 고역 롤오프 6~8kHz(로파이). 짧은 테이프/스프링 리버브. Tape Delay 워블.",
+  neoclassical:"피아노·현: 자연스러운 홀 2.5~4s(실연 공간). 모듈레이션 없음. 센드 적당·다이내믹 살림.",
+  indian:"탐푸라 드론 지속(드라이·센터). 시타르·반수리에 긴 잔향 5~7s + 롱 딜레이(끝없는 느낌). 멜로디만 리버브.",
+  tibetan:"싱잉볼·징: 매우 긴 자연 잔향 6~10s + 배음 강조(하이셸프 살짝). 딜레이 없음. 깊은 공명·담핑 적게.",
+  bali:"가믈란·금속: 밝은 잔향 2~4s(고역 살림) + 짧은 슬랩 딜레이. 하이컷 높게(금속 배음). 청명하게.",
+  soundhealing:"순음 드론·싱잉볼: 긴 잔향 6~8s·순수하게. 모듈레이션·딜레이 최소. 432/528Hz 튜닝. EQ 깨끗이(배음 방해 X)."
+};
+
 // 목적별 곡 구조 (타임라인)
 const STRUCTURE = {
   sleep:{length:"10~20분", steps:[
@@ -1608,12 +1623,19 @@ function isPlainMajor(ch){ const q=ch.replace(/^[A-G](#|b|\u266d)?/,''); return 
 function randomProgression(poolKey, len){
   const pool = CHORD_POOLS[poolKey] || CHORD_POOLS.bright;
   len = len || 4; // 4코드 = 도입-전개-전개-열린종료 (2코드 진자운동 방지)
+  // 숨 쉬는 여백: 명상 계열 pool일수록 같은 코드를 붙잡아 화성이 쉬어감 (hold 확률)
+  const POOL_SPACE = { dark:0.45, ethereal:0.50, warm:0.40, dreamy:0.30, bright:0.12 };
+  const space = (POOL_SPACE[poolKey]!=null) ? POOL_SPACE[poolKey] : 0.30;
   const start = pool.starts[Math.floor(Math.random()*pool.starts.length)];
   const seq = [start];
+  let holds = 0;
   for(let i=1;i<len;i++){
     const prev = seq[seq.length-1], prevRoot = rootOf(prev);
-    // 후보 채점
-    const scored = pool.chords.filter(x=>x!==prev && seq.indexOf(x)<0).map(ch=>{
+    // 여백: 마지막 슬롯이 아니고 연속 hold 2회 미만이면, 확률적으로 같은 코드 유지 (숨)
+    if(i < len-1 && holds < 2 && Math.random() < space){ seq.push(prev); holds++; continue; }
+    holds = 0;
+    // 후보 채점 (직전과 다른 코드 — 이전에 나온 코드로 되돌아오는 건 허용: 순환·페달감)
+    const scored = pool.chords.filter(x=>x!==prev).map(ch=>{
       const r = rootOf(ch);
       const iv = Math.min((r-prevRoot+12)%12, (prevRoot-r+12)%12); // 근음 간격(0~6)
       let w = [0.0, 0.9, 1.0, 1.0, 0.9, 0.7, 0.35][iv]; // 같은근음0, 2·3도 선호
@@ -2374,6 +2396,8 @@ function buildMidi(){
     if(wk && BRAINWAVES[wk]) gtxt+='유도: '+BRAINWAVES[wk].name+' '+BRAINWAVES[wk].beat+'Hz';
     if(bk && BREATHS[bk]) gtxt+=(gtxt?' · ':'')+'호흡: '+BREATHS[bk].name+' (들'+BREATHS[bk].in+'·날'+BREATHS[bk].out+')';
     if(gtxt) cond = cond.concat(utf8Meta(0x06, gtxt));
+    // 장르 FX 레시피 마커 (MIDI에 기록 — Logic 마커 트랙에서 확인)
+    if(state.aes && AES_FXREC[state.aes]) cond = cond.concat(utf8Meta(0x06, 'FX['+AESTHETICS[state.aes].name+']: '+AES_FXREC[state.aes]));
     // 셀렉터 명상(Hz) 프리셋 반영 표시 (아크 구간 마커는 아래 M 배열에서 시각순 배치)
     if(_specOn && sumSpec.unit!=='BPM' && sumSpec.segments){
       cond = cond.concat(utf8Meta(0x01, '[셀렉터 프리셋] '+sumSpec.mode+' · '+(sumSpec.totalMin||'?')+'분 · 유도 아크 반영'
@@ -2834,6 +2858,23 @@ Logic Pro 채널 스트립 · 순서: Channel EQ → Compressor → ChromaVerb
 ※ 리버브는 인서트보다 센드(Aux) 권장 — 컴프 뒤 펌핑 방지 + 공간 일관성.
    Aux 2개: Verb-A(ChromaVerb Chamber 3.5s/70%) · Verb-B(Synth Hall 5.5s/85%) · 리턴 HPF 400~500Hz·하이 담핑
    저역(Bass/Drone)은 센드 0 — 리버브 안 보냄.
+
+[장르(에스테틱) FX — 무엇을·어느 트랙에·어떻게]  ※ MIDI엔 못 담겨 로직에서
+${state.aes ? '▶ 현재 장르 ['+AESTHETICS[state.aes].name+']\n    '+AES_FXREC[state.aes] : '▶ 장르 미선택 — 아래에서 골라 참고'}
+
+· 전체 장르 한눈:
+${Object.keys(AES_FXREC).map(k=>'  ['+AESTHETICS[k].name+'] '+AES_FXREC[k]).join('\n')}
+
+[몽환적(Dreamy) 만들기 — 선택 · MIDI엔 못 담겨 로직에서]
+리버브만으론 안 됨. 아래를 패드(Chord/Air)에 겹쳐야 "몽환"이 나옴:
+· 모듈레이션(핵심)  Chorus 또는 Ensemble — Rate 0.2~0.5Hz(아주 느리게) · Depth 20~35% · Mix 25~40%
+    → 살짝 흔들리는 디튠으로 소리가 "부유"함
+· 쉬머(Shimmer)     리버브 센드를 Pitch Shifter +12(한 옥타브 위)로 다시 리버브에 → 천상의 배음
+    (Aux: ChromaVerb → Pitch Shifter +12 → 피드백 소량) · 아주 은은하게 -18dB
+· 롱 딜레이         Tape/Stereo Delay · 1/4~1/2 점음표 · 피드백 30~45% · 피드백에 HPF 300·LPF 4k(덥 딜레이)
+· 와이드           패드 스테레오 넓게 · 리버브 5~8s(길게) · 리턴 하이 담핑
+· 느린 필터 LFO    AutoFilter Cutoff를 0.05~0.1Hz로 천천히 열고 닫기
+※ 저역·포인트엔 걸지 말 것 — 패드/텍스처에만. 과하면 탁해지니 각 Mix는 낮게 시작.
 
 [MIDI에 이미 박혀 있는 것 — Logic "열기(Open)"로 불러오세요 (Import 아님)]
    · 템포 60 BPM(1초=1박) · 4/4 · 루프 마커(Loop 1, 2…)
