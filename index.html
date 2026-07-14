@@ -2420,11 +2420,38 @@ function updatePurposeHint(){
   const p=PURPOSES[state.purpose];
   el.innerHTML = `<b>${p.icon} ${p.name}</b> — ${p.feel} · 템포 ${p.tempo}`;
 }
+function genreFit(){
+  const p=state.purpose, a=state.aes;
+  if(!p || !a) return null;
+  const LOW=['sleep','meditation','relax','calm','spa','baby'];
+  const HIGH=['focus','morning','flow','pilates','walking'];
+  const lowP=LOW.includes(p), highP=HIGH.includes(p);
+  if(a==='bali' && lowP) return {lv:'❌', msg:'발리의 밝은 금속 shimmer가 깊은 이완·수면과 어긋납니다.', alt:'ambient·natural·zen'};
+  if(a==='soundhealing' && highP) return {lv:'❌', msg:'순음 정지 드론은 움직임·상승이 없어 활동/각성엔 추진력이 약합니다.', alt:'ambient·natural·vintage'};
+  if(['zen','tibetan','indian'].includes(a) && ['pilates','walking'].includes(p)) return {lv:'❌', msg:'정적 드론 장르에 운동 리듬(빠른 상승)이 맞물리지 않습니다.', alt:'natural·vintage·bali'};
+  if(['zen','tibetan','indian'].includes(a) && highP) return {lv:'⚠️', msg:'정적인 장르에 상승 아크 — 결이 살짝 어긋날 수 있습니다.', alt:'ambient·natural'};
+  if(a==='soundhealing' && ['flow','morning'].includes(p)) return {lv:'⚠️', msg:'순음은 정적이라 상승감이 약합니다.', alt:'ambient·natural'};
+  if(a==='bali' && p==='flow') return {lv:'⚠️', msg:'밝음은 맞으나 명상 톤과 경계에 있습니다.', alt:''};
+  if(a==='cinematic' && p==='baby') return {lv:'⚠️', msg:'웅장함이 아기 수면에 다소 과할 수 있습니다.', alt:'natural·ambient'};
+  return {lv:'✅', msg:'', alt:''};
+}
 function updateAesHint(){
   const el=document.getElementById('aesHintBox'); if(!el) return;
   if(!state.aes){ el.innerHTML='<span style="color:#8a94ad">에스테틱은 선택 사항입니다. 고르면 악기 톤·이펙트·여백·믹스가 그 방향으로 바뀝니다.</span>'; return; }
   const a=AESTHETICS[state.aes];
-  el.innerHTML = `<b>${a.icon} ${a.name}</b> (${a.ref}) — ${a.space}`;
+  let html = `<b>${a.icon} ${a.name}</b> (${a.ref}) — ${a.space}`;
+  const fit=genreFit();
+  if(fit){
+    const color={'✅':'#7bd88f','⚠️':'#e8c06a','❌':'#e88a8a'}[fit.lv];
+    const pn=(PURPOSES[state.purpose]&&PURPOSES[state.purpose].name)||state.purpose;
+    let line = `<div style="margin-top:6px;color:${color};font-size:12px">${fit.lv} <b>${pn}</b> 궁합`;
+    if(fit.msg) line += ` — ${fit.msg}`;
+    else line += ' — 잘 어울립니다';
+    if(fit.alt) line += ` <span style="color:#8a94ad">(대안: ${fit.alt})</span>`;
+    line += '</div>';
+    html += line;
+  }
+  el.innerHTML = html;
 }
 function setScaleType(t){ stopBGM(); state.scaleType=t; state.selProg=null; state.mode='auto'; randomMelodies=[]; randomProgs=[]; showRandom=false; document.querySelectorAll('#scaleToggle .opt-g').forEach(e=>e.classList.toggle('active',e.dataset.st===t)); render(); }
 function setMode(m){ state.mode=m; render(); }
