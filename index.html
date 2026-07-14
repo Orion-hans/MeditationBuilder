@@ -1274,6 +1274,24 @@ function midiTrackSpec(){
     {key:'hp',    gate:'point',  name:'Handpan',  ch:5, prog:108, vol:76, pan:58, revMul:1.0, gm:'Kalimba',           to:'핸드팬 음원 (또는 '+I.pt+')', midiName:'Handpan · 따뜻한 금속 타현 "통통" (예: Sculpture 금속 말렛·핸드팬 샘플) — Mallet/World', role:'포인트 — 따뜻한 리듬 점',       memo:function(){return '포인트 — 따뜻한 리듬 점';}}
   ];
 }
+// 장르 선택 시 트랙 이름을 그 장르 악기 성격으로 (미선택 시 기본 midiName)
+function midiNameFor(sp){
+  const g = (state.aes && typeof GENRE_SPEC!=='undefined' && GENRE_SPEC[state.aes]) ? GENRE_SPEC[state.aes] : null;
+  if(!g) return sp.midiName;
+  const find = pre => g.tracks.find(x=>x.role.indexOf(pre)===0);
+  const nm = g.name;
+  const chord=find('Chord'), bass=find('Bass'), mel=find('Melody'), point=find('포인트'), sing=find('Bowl Sing');
+  switch(sp.key){
+    case 'chord': return chord ? ('Chord · '+chord.inst+'  ['+nm+']') : sp.midiName;
+    case 'bass':  return bass  ? ('Bass · '+bass.inst+'  ['+nm+']') : sp.midiName;
+    case 'mel':   return mel   ? ('Melody · '+mel.inst+'  ['+nm+']') : sp.midiName;
+    case 'sing':  return sing  ? ('Bowl Sing · '+sing.inst+'  ['+nm+']') : sp.midiName;
+    case 'bell':  return point ? ('Point 1 (구간 경계) · '+point.inst+'  ['+nm+']') : sp.midiName;
+    case 'ting':  return point ? ('Point 2 (시작·마침) · '+point.inst+'  ['+nm+']') : sp.midiName;
+    case 'hp':    return point ? ('Point 3 (리듬 점) · '+point.inst+'  ['+nm+']') : sp.midiName;
+  }
+  return sp.midiName;
+}
 // 비어있는 가이드 트랙 (MIDI엔 이름만, Logic에서 채움)
 const MIDI_GUIDE_TRACKS = [
   {name:'[가이드] Texture — Granular Cloud (Alchemy Granular)', desc:'비어있는 가이드 트랙. 패드 소스(또는 이 파일 WAV)를 Alchemy 그래뉼러로 — 서서히 모핑하는 질감 구름. 고조~만개 구간에서만 -18dB로 올리고 침잠·방하에선 뮤트. 필터 컷오프를 아주 느리게 오토메이션.', short:'Texture (Alchemy Granular) : 패드/이 곡 WAV를 그래뉼러로 — 서서히 모핑하는 질감 구름. 고조~만개에서만 -18dB, 침잠·방하엔 뮤트. 컷오프 아주 느리게 오토메이션.'},
@@ -3062,7 +3080,7 @@ function buildMidi(){
     if(LY[sp.gate]===false) return;
     var rv=Math.min(127, Math.round(rev*sp.revMul));
     if(_noteArrs[sp.key] && _noteArrs[sp.key].length) addFades(_noteArrs[sp.key], sp.vol);
-    pushTrack(sp.midiName, sp.memo(rev), chSetup(sp.ch, sp.prog, sp.vol, sp.pan, rv), _noteArrs[sp.key], sp.ch);
+    pushTrack(midiNameFor(sp), sp.memo(rev), chSetup(sp.ch, sp.prog, sp.vol, sp.pan, rv), _noteArrs[sp.key], sp.ch);
   });
 
   // ── 트렌드 가이드 트랙 (빈 트랙) — Logic에서 채울 자리 (MIDI_GUIDE_TRACKS 공유) ──
